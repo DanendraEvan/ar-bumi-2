@@ -61,6 +61,18 @@
     #info-modal .close-btn{margin-top:18px;width:100%;padding:12px;background:none;border:1px solid #33ccff;border-radius:6px;color:#33ccff;font:inherit;font-weight:bold;cursor:pointer}
     #info-modal .close-btn:hover{background:rgba(51,204,255,.2);outline:none}
 
+    /* Wadah UI: diputar mengikuti arah HP sebenarnya (lihat skrip sensor di bawah) */
+    #ui-rot{position:fixed;left:50%;top:50%;z-index:10001;pointer-events:none;transform:translate(-50%,-50%)}
+    #ui-rot .ui-btn,#ui-rot #menu-panel{pointer-events:auto}
+    #ui-rot #info-modal{max-height:80%}
+    #ui-rot.land .ui-btn{width:44px;height:44px}
+    #ui-rot.land .ui-btn svg{width:20px;height:20px}
+    #ui-rot.land #btn-menu,#ui-rot.land #btn-info{top:calc(10px + env(safe-area-inset-top,0px))}
+    #ui-rot.land #btn-next{bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+    #ui-rot.land #gui-container{top:calc(10px + env(safe-area-inset-top,0px));width:40%}
+    #ui-rot.land #menu-panel{padding-top:64px}
+    #ui-rot.land #info-modal{padding:16px}
+
     /* Penyesuaian landscape / layar pendek / poni (notch) */
     #btn-menu,#btn-next{left:calc(20px + env(safe-area-inset-left,0px))}
     #btn-info{right:calc(20px + env(safe-area-inset-right,0px))}
@@ -322,6 +334,67 @@
           frame = t < 1 ? requestAnimationFrame(langkah) : null;
         })(mulai);
       });
+    })();
+  </script>
+
+  <script>
+    /* ARAH SELURUH UI MENGIKUTI ARAH HP SEBENARNYA (sensor gravitasi)
+       Berguna saat rotasi layar HP terkunci: halaman tetap portrait, tetapi navigasi (menu, info, tombol putar, label, panel)
+       ikut diputar 90°/180°/270°, dan geser jari untuk memutar objek juga disesuaikan arahnya.
+       qDeg = putaran UI searah jarum jam (0 / 90 / 180 / 270). */
+    (function () {
+      const D = Math.PI / 180;
+      const rot = document.createElement('div');
+      rot.id = 'ui-rot';
+      document.body.appendChild(rot);
+      ['gui-container', 'btn-menu', 'btn-info', 'btn-next', 'overlay', 'menu-panel', 'info-modal'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) rot.appendChild(el);
+      });
+
+      let qDeg = 0, kunci = '';
+      function terapkan() {
+        const W = window.innerWidth, H = window.innerHeight, ganjil = (qDeg % 180) !== 0, pw = ganjil ? H : W, ph = ganjil ? W : H;
+        rot.classList.toggle('land', pw > ph);
+        const key = W + '|' + H + '|' + qDeg;
+        if (key === kunci) return;
+        kunci = key;
+        rot.style.width = pw + 'px';
+        rot.style.height = ph + 'px';
+        rot.style.transform = 'translate(-50%,-50%) rotate(' + qDeg + 'deg)';
+      }
+
+      function tiltHandler(e) {
+        if (e.beta == null || e.gamma == null) return;
+        const b = e.beta * D, g = e.gamma * D;
+        const ux = -Math.cos(b) * Math.sin(g), uy = Math.sin(b);   // arah "atas" dunia pada bingkai perangkat
+        const a = ((screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0)) * D;
+        const px = ux * Math.cos(a) - uy * Math.sin(a), py = ux * Math.sin(a) + uy * Math.cos(a);   // pada bingkai halaman
+        if (Math.hypot(px, py) < 0.4) return;                      // HP hampir mendatar: pertahankan arah terakhir
+        const phi = Math.atan2(px, py) / D;                        // sudut searah jarum jam dari "atas halaman"
+        const diff = ((phi - qDeg + 540) % 360) - 180;
+        if (Math.abs(diff) > 50) { qDeg = ((Math.round(phi / 90) * 90) % 360 + 360) % 360; terapkan(); }
+      }
+      let tiltOn = false;
+      function startTilt() { if (tiltOn) return; tiltOn = true; window.addEventListener('deviceorientation', tiltHandler); }
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS: perlu izin sensor setelah ketukan pertama
+        const minta = function () { DeviceOrientationEvent.requestPermission().then(function (r) { if (r === 'granted') startTilt(); }).catch(function () {}); };
+        ['click', 'touchend'].forEach(function (ev) { window.addEventListener(ev, minta, { once: true }); });
+      } else startTilt();
+
+      // Geser jari untuk memutar objek: arahnya diputar sesuai arah HP (agar "kanan" tetap kanan menurut pengguna)
+      window.addEventListener('onefingermove', function (e) {
+        const d = e.detail;
+        if (!d || !d.positionChange || qDeg === 0) return;
+        const q = qDeg * D, c = Math.cos(q), s = Math.sin(q), x = d.positionChange.x, y = d.positionChange.y;
+        d.positionChange.x = x * c + y * s;
+        d.positionChange.y = -x * s + y * c;
+      }, true);
+
+      window.addEventListener('resize', terapkan);
+      window.addEventListener('orientationchange', function () { setTimeout(terapkan, 300); });
+      terapkan();
     })();
   </script>
 </body>
