@@ -21,6 +21,7 @@
 
   <style>
     .a-modal { display: none !important; }
+    html,body{width:100%;height:100%}
     body{margin:0;overflow:hidden;font-family:'IBM Plex Mono','Courier New',Courier,monospace;background:#000;user-select:none}
 
     .loading{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;font-size:18px;font-weight:500;letter-spacing:3px;color:#fff;text-shadow:0 0 20px rgba(77,184,255,.5);
@@ -131,7 +132,6 @@
     vr-mode-ui="enabled: false;"
     loading-screen="enabled: false;"
     renderer="logarithmicDepthBuffer: true;"
-    embedded
     gesture-detector
   >
     <a-entity light="type: ambient; color: #ffffff; intensity: 1.2"></a-entity>
