@@ -3,88 +3,455 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+
   <title>Earth AR Scanner</title>
 
+  <!-- Font yang sama dengan halaman utama -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- A-Frame & AR.js -->
+  <!-- A-Frame & AR.js Libraries -->
   <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-detector.js"></script>
   <script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-handler.js"></script>
-
-  <!-- Objek 3D (file terpisah, ganti model di sini) -->
-  <script src="./model.js"></script>
+  
+  <!-- Library agar teks & nomor selalu menghadap kamera -->
+  <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
 
   <style>
-    body{margin:0;overflow:hidden;font-family:'IBM Plex Mono','Courier New',Courier,monospace;background:#000;user-select:none}
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+      background: #000;
+      user-select: none;
+    }
 
-    .loading{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;font-size:18px;font-weight:500;letter-spacing:3px;color:#fff;text-shadow:0 0 20px rgba(77,184,255,.5);
-      background:radial-gradient(ellipse 110% 45% at 50% 112%,rgba(40,130,255,.5),transparent 72%),linear-gradient(180deg,#000 0%,#02050d 55%,#061226 100%)}
-    .loading::after{content:'';display:block;width:40px;height:40px;margin:28px auto 0;border:3px solid rgba(77,184,255,.22);border-top:3px solid #ffb347;border-radius:50%;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    @keyframes pulse{0%{transform:scale(1)}100%{transform:scale(1.03)}}
+    /* Loading Screen */
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 24px;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      color: #ffffff;
+      text-shadow: 0 0 20px rgba(77, 184, 255, 0.5);
+      background:
+        radial-gradient(ellipse 28% 20% at 50% 46%, rgba(255, 214, 140, 0.35), transparent 70%),
+        radial-gradient(ellipse 48% 34% at 50% 48%, rgba(255, 140, 40, 0.18), transparent 72%),
+        radial-gradient(ellipse 110% 45% at 50% 112%, rgba(40, 130, 255, 0.5), transparent 72%),
+        linear-gradient(180deg, #000 0%, #02050d 55%, #061226 100%);
+    }
 
-    #gui-container{position:absolute;top:calc(22px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:999;text-align:center;width:65%;max-width:320px;pointer-events:none}
-    .object-tag{background:rgba(0,0,0,.78);color:#33ccff;border:1.5px solid #33ccff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:bold;letter-spacing:1px;box-shadow:0 0 15px rgba(51,204,255,.45);display:none;animation:pulse 1.5s infinite alternate}
+    .loading::before {
+      content: '';
+      width: 46px;
+      height: 46px;
+      margin-bottom: 26px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='1' stop-color='%23ffb347'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M20 0C21.5 12 28 18.5 40 20C28 21.5 21.5 28 20 40C18.5 28 12 21.5 0 20C12 18.5 18.5 12 20 0Z' fill='url(%23g)'/%3E%3C/svg%3E") center / contain no-repeat;
+      filter: drop-shadow(0 0 10px rgba(255, 179, 71, 0.8));
+    }
 
-    .ui-btn{position:absolute;z-index:10001;width:52px;height:52px;padding:0;border-radius:50%;background:rgba(0,0,0,.6);border:2px solid #33ccff;color:#33ccff;display:grid;place-items:center;cursor:pointer;box-shadow:0 0 15px rgba(51,204,255,.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);-webkit-tap-highlight-color:transparent;touch-action:manipulation;font-family:inherit;transition:background .2s,transform .15s}
-    .ui-btn:hover,.ui-btn:focus-visible{background:rgba(51,204,255,.2);outline:none}
-    .ui-btn:active{transform:scale(.92)}
-    .ui-btn svg{width:24px;height:24px;display:block}
-    #btn-menu{top:calc(20px + env(safe-area-inset-top,0px));left:20px}
-    #btn-info{top:calc(20px + env(safe-area-inset-top,0px));right:20px;font-size:26px;font-weight:bold;line-height:1}
-    #btn-next{bottom:calc(30px + env(safe-area-inset-bottom,0px));left:20px}
+    .loading::after {
+      content: '';
+      display: block;
+      width: 40px;
+      height: 40px;
+      margin: 28px auto 0;
+      border: 3px solid rgba(77, 184, 255, 0.22);
+      border-top: 3px solid #ffb347;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
 
-    #overlay{position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s}
-    #overlay.show{opacity:1;pointer-events:auto}
+    /* Dynamic UI Overlay */
+    #gui-container {
+      position: absolute;
+      top: calc(22px + env(safe-area-inset-top, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      text-align: center;
+      width: 65%;
+      max-width: 320px;
+      pointer-events: none;
+    }
 
-    #menu-panel{position:fixed;top:0;left:0;bottom:0;width:min(80vw,300px);z-index:10003;background:rgba(0,0,0,.92);border-right:2px solid #33ccff;box-shadow:0 0 25px rgba(51,204,255,.4);padding:calc(90px + env(safe-area-inset-top,0px)) 24px 24px;transform:translateX(-105%);transition:transform .3s ease;color:#33ccff;box-sizing:border-box}
-    #menu-panel.show{transform:translateX(0)}
-    #menu-panel h2{margin:0 0 20px;font-size:14px;letter-spacing:3px;opacity:.7}
-    #menu-panel a,#menu-panel button.menu-item{display:block;width:100%;box-sizing:border-box;padding:14px 4px;margin:0;background:none;border:0;border-bottom:1px solid rgba(51,204,255,.25);color:#33ccff;font:inherit;font-size:16px;text-align:left;text-decoration:none;cursor:pointer}
-    #menu-panel a:hover,#menu-panel button.menu-item:hover{color:#fff;outline:none}
+    .object-tag {
+      background: rgba(0, 0, 0, 0.78);
+      color: #33ccff;
+      border: 1.5px solid #33ccff;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      box-shadow: 0 0 15px rgba(51, 204, 255, 0.45);
+      display: none;
+      animation: pulse 1.5s infinite alternate;
+    }
 
-    #info-modal{position:fixed;top:50%;left:50%;z-index:10003;width:min(88vw,380px);max-height:80vh;overflow-y:auto;transform:translate(-50%,-50%) scale(.92);opacity:0;pointer-events:none;background:rgba(0,0,0,.92);border:2px solid #33ccff;border-radius:12px;box-shadow:0 0 25px rgba(51,204,255,.5);padding:24px;color:#fff;box-sizing:border-box;transition:opacity .25s,transform .25s}
-    #info-modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
-    #info-modal h2{margin:0 0 14px;color:#33ccff;font-size:18px;letter-spacing:2px}
-    #info-modal ol{margin:0;padding-left:20px;line-height:1.7;font-size:14px}
-    #info-modal li{margin-bottom:6px}
-    #info-modal .close-btn{margin-top:18px;width:100%;padding:12px;background:none;border:1px solid #33ccff;border-radius:6px;color:#33ccff;font:inherit;font-weight:bold;cursor:pointer}
-    #info-modal .close-btn:hover{background:rgba(51,204,255,.2);outline:none}
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 10px rgba(51, 204, 255, 0.4); }
+      100% { transform: scale(1.03); box-shadow: 0 0 20px rgba(51, 204, 255, 0.8); }
+    }
+
+    /* ========================================== */
+    /* TOMBOL MENU, INFO, DAN PANAH               */
+    /* ========================================== */
+    .ui-btn {
+      position: absolute;
+      z-index: 10001;
+      width: 52px;
+      height: 52px;
+      padding: 0;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid #33ccff;
+      color: #33ccff;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(51, 204, 255, 0.5);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      font-family: inherit;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .ui-btn:hover, .ui-btn:focus-visible { background: rgba(51, 204, 255, 0.2); outline: none; }
+    .ui-btn:active { transform: scale(0.92); }
+    .ui-btn svg { width: 24px; height: 24px; display: block; }
+
+    #btn-menu { top: calc(20px + env(safe-area-inset-top, 0px)); left: 20px; }
+    #btn-info { top: calc(20px + env(safe-area-inset-top, 0px)); right: 20px; font-size: 26px; font-weight: bold; line-height: 1; }
+    #btn-next { bottom: calc(30px + env(safe-area-inset-bottom, 0px)); left: 20px; }
+
+    /* ========================================== */
+    /* TAMBAHAN: PANEL DETAIL TITIK & TOMBOL CEPAT*/
+    /* ========================================== */
+    #hotspot-quick-bar {
+      position: fixed;
+      bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+      right: 20px;
+      z-index: 10000;
+      display: none;
+      gap: 10px;
+      align-items: center;
+    }
+    #hotspot-quick-bar.show {
+      display: flex;
+    }
+    .num-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0, 12, 28, 0.85);
+      border: 2px solid #33ccff;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(51, 204, 255, 0.45);
+      transition: all 0.2s ease;
+    }
+    .num-btn.active, .num-btn:hover {
+      background: #ffb347;
+      border-color: #ffffff;
+      color: #000000;
+      box-shadow: 0 0 16px rgba(255, 179, 71, 0.85);
+      transform: scale(1.08);
+    }
+
+    /* Card Informasi saat titik diklik */
+    #point-card {
+      position: fixed;
+      bottom: calc(95px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translate(-50%, 20px);
+      width: min(90vw, 400px);
+      background: rgba(3, 12, 26, 0.92);
+      border: 2px solid #ffb347;
+      border-radius: 12px;
+      padding: 18px 20px;
+      color: #ffffff;
+      z-index: 10001;
+      box-shadow: 0 0 25px rgba(255, 179, 71, 0.35);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.28s ease, transform 0.28s ease;
+      box-sizing: border-box;
+    }
+    #point-card.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, 0);
+    }
+    .point-badge {
+      display: inline-block;
+      background: rgba(255, 179, 71, 0.2);
+      border: 1px solid #ffb347;
+      color: #ffb347;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    #point-title {
+      margin: 0 0 8px;
+      font-size: 17px;
+      color: #33ccff;
+      letter-spacing: 0.5px;
+    }
+    #point-desc {
+      margin: 0 0 14px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: #e0f2fe;
+    }
+    .point-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .point-actions button {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #btn-reset-zoom {
+      background: rgba(51, 204, 255, 0.15);
+      border: 1px solid #33ccff;
+      color: #33ccff;
+    }
+    #btn-reset-zoom:hover {
+      background: rgba(51, 204, 255, 0.3);
+    }
+
+    /* Lapisan gelap di belakang menu dan jendela info */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10002;
+      background: rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    #overlay.show { opacity: 1; pointer-events: auto; }
+
+    /* Panel menu dari kiri */
+    #menu-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: min(80vw, 300px);
+      z-index: 10003;
+      background: rgba(0, 0, 0, 0.92);
+      border-right: 2px solid #33ccff;
+      box-shadow: 0 0 25px rgba(51, 204, 255, 0.4);
+      padding: calc(90px + env(safe-area-inset-top, 0px)) 24px 24px;
+      transform: translateX(-105%);
+      transition: transform 0.3s ease;
+      color: #33ccff;
+      box-sizing: border-box;
+    }
+    #menu-panel.show { transform: translateX(0); }
+    #menu-panel h2 { margin: 0 0 20px; font-size: 14px; letter-spacing: 3px; opacity: 0.7; }
+    #menu-panel a, #menu-panel button.menu-item {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 14px 4px;
+      margin: 0;
+      background: none;
+      border: 0;
+      border-bottom: 1px solid rgba(51, 204, 255, 0.25);
+      color: #33ccff;
+      font: inherit;
+      font-size: 16px;
+      text-align: left;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    #menu-panel a:hover, #menu-panel button.menu-item:hover { color: #fff; outline: none; }
+
+    /* Jendela informasi */
+    #info-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      z-index: 10003;
+      width: min(88vw, 380px);
+      max-height: 80vh;
+      overflow-y: auto;
+      transform: translate(-50%, -50%) scale(0.92);
+      opacity: 0;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.92);
+      border: 2px solid #33ccff;
+      border-radius: 12px;
+      box-shadow: 0 0 25px rgba(51, 204, 255, 0.5);
+      padding: 24px;
+      color: #fff;
+      box-sizing: border-box;
+      transition: opacity 0.25s, transform 0.25s;
+    }
+    #info-modal.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+    #info-modal h2 { margin: 0 0 14px; color: #33ccff; font-size: 18px; letter-spacing: 2px; }
+    #info-modal ol { margin: 0; padding-left: 20px; line-height: 1.7; font-size: 14px; }
+    #info-modal li { margin-bottom: 6px; }
+    #info-modal .close-btn {
+      margin-top: 18px;
+      width: 100%;
+      padding: 12px;
+      background: none;
+      border: 1px solid #33ccff;
+      border-radius: 6px;
+      color: #33ccff;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #info-modal .close-btn:hover { background: rgba(51, 204, 255, 0.2); outline: none; }
   </style>
 
   <script>
-    // Tampilkan label saat marker terdeteksi
+    // Data Informasi & Target Zoom untuk Setiap Titik Penomoran
+    const DATA_TITIK = {
+      "1": {
+        badge: "TITIK #1",
+        title: "Litosfer (Daratan & Benua)",
+        desc: "Lapisan kerak bumi paling luar yang terdiri dari batuan, tanah, dan benua tempat tinggal manusia serta ekosistem darat.",
+        targetScale: { x: 0.95, y: 0.95, z: 0.95 },
+        targetRotationY: -0.6, // Sudut putar agar titik 1 menghadap depan kamera
+        targetPos: { x: -0.2, y: -0.1, z: 0 }
+      },
+      "2": {
+        badge: "TITIK #2",
+        title: "Atmosfer & Lapisan Awan",
+        desc: "Selubung gas dan uap air yang melindungi Bumi dari radiasi matahari serta mengatur siklus cuaca dan iklim global.",
+        targetScale: { x: 0.95, y: 0.95, z: 0.95 },
+        targetRotationY: 0.8, // Sudut putar agar titik 2 menghadap depan kamera
+        targetPos: { x: 0.2, y: -0.35, z: 0 }
+      },
+      "3": {
+        badge: "TITIK #3",
+        title: "Hidrosfer (Samudra & Lautan)",
+        desc: "Lebih dari 70% permukaan Bumi tertutup oleh air laut yang berperan penting menjaga suhu global dan mendukung kehidupan laut.",
+        targetScale: { x: 0.95, y: 0.95, z: 0.95 },
+        targetRotationY: 0.0, // Sudut putar agar titik 3 menghadap depan kamera
+        targetPos: { x: 0, y: 0.2, z: 0 }
+      }
+    };
+
+    // Komponen deteksi marker
     AFRAME.registerComponent('marker-listener', {
       init: function () {
+        const marker = this.el;
+        const objectName = marker.getAttribute('data-name');
         const tag = document.getElementById('object-tag');
-        this.el.addEventListener('markerFound', () => {
-          const nama = (window.MODEL_CONFIG && window.MODEL_CONFIG.nama) || 'Model';
-          tag.innerText = '🌍 DETEKSI: ' + nama.toUpperCase();
+        const quickBar = document.getElementById('hotspot-quick-bar');
+
+        marker.addEventListener('markerFound', () => {
+          tag.innerText = "🌍 DETEKSI: " + objectName.toUpperCase() + " (KLIK NOMOR)";
           tag.style.display = 'block';
+          if (quickBar) quickBar.classList.add('show');
         });
-        this.el.addEventListener('markerLost', () => { tag.style.display = 'none'; });
+
+        marker.addEventListener('markerLost', () => {
+          tag.style.display = 'none';
+          if (quickBar) quickBar.classList.remove('show');
+        });
+      }
+    });
+
+    // Komponen Hotspot Klik pada Titik Penomoran 3D
+    AFRAME.registerComponent('hotspot-point', {
+      schema: {
+        pointId: { type: 'string', default: '1' }
+      },
+      init: function () {
+        this.el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (window.pilihTitikAR) {
+            window.pilihTitikAR(this.data.pointId);
+          }
+        });
       }
     });
   </script>
 </head>
 <body>
+  <!-- Loading -->
   <div class="loading" id="loading">MEMUAT TAMPILAN BUMI...</div>
 
-  <div id="gui-container"><div class="object-tag" id="object-tag"></div></div>
+  <!-- Label Deteksi Atas -->
+  <div id="gui-container">
+    <div class="object-tag" id="object-tag"></div>
+  </div>
 
+  <!-- Tombol Menu (Kiri Atas) -->
   <button class="ui-btn" id="btn-menu" type="button" aria-label="Buka menu" aria-controls="menu-panel" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-  </button>
-  <button class="ui-btn" id="btn-info" type="button" aria-label="Informasi" aria-controls="info-modal">i</button>
-  <button class="ui-btn" id="btn-next" type="button" aria-label="Putar model ke kanan">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
   </button>
 
+  <!-- Tombol Informasi (Kanan Atas) -->
+  <button class="ui-btn" id="btn-info" type="button" aria-label="Informasi" aria-controls="info-modal">i</button>
+
+  <!-- Tombol Panah Kanan (Kiri Bawah) -->
+  <button class="ui-btn" id="btn-next" type="button" aria-label="Putar model ke kanan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  </button>
+
+  <!-- Tombol Akses Cepat Nomor (Kanan Bawah - membantu jika kamera goyang) -->
+  <div id="hotspot-quick-bar" aria-label="Pilih titik nomor">
+    <button class="num-btn" type="button" data-point="1">1</button>
+    <button class="num-btn" type="button" data-point="2">2</button>
+    <button class="num-btn" type="button" data-point="3">3</button>
+  </div>
+
+  <!-- Panel Informasi Saat Titik Nomor Diklik -->
+  <div id="point-card" role="region" aria-live="polite">
+    <span class="point-badge" id="point-badge">TITIK #1</span>
+    <h3 id="point-title">Judul Titik</h3>
+    <p id="point-desc">Deskripsi informasi titik akan tampil di sini.</p>
+    <div class="point-actions">
+      <button type="button" id="btn-reset-zoom">Reset Zoom & Tutup</button>
+    </div>
+  </div>
+
+  <!-- Lapisan gelap, panel menu, dan jendela panduan -->
   <div id="overlay"></div>
 
   <aside id="menu-panel" aria-hidden="true">
@@ -98,93 +465,333 @@
     <h2 id="info-title">PANDUAN AR</h2>
     <ol>
       <li>Izinkan browser memakai kamera.</li>
-      <li>Arahkan kamera ke foto/marker sampai model 3D muncul.</li>
-      <li>Geser satu jari untuk memutar model, atau cubit dua jari untuk memperbesar/memperkecil.</li>
+      <li>Arahkan kamera ke foto/marker sampai Bumi 3D muncul.</li>
+      <li><strong>Klik angka (1, 2, atau 3)</strong> pada objek 3D (atau tombol angka di kanan bawah) untuk melakukan <strong>Zoom In</strong> dan membaca informasi.</li>
+      <li>Geser satu jari untuk memutar model, atau cubit dua jari untuk memperbesar/memperkecil manual.</li>
     </ol>
     <button class="close-btn" id="info-close" type="button">TUTUP</button>
   </div>
 
-  <!-- AR Scene: kamera + marker. Objek 3D dipanggil dari model.js -->
+  <!-- AR Scene (Dilengkapi cursor & raycaster untuk deteksi klik pada objek .hotspot) -->
   <a-scene
     vr-mode-ui="enabled: false;"
     loading-screen="enabled: false;"
     renderer="logarithmicDepthBuffer: true;"
     arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;"
+    cursor="fuse: false; rayOrigin: mouse;"
+    raycaster="objects: .hotspot; far: 1000;"
     embedded
     gesture-detector
   >
+    <!-- Pencahayaan Standar -->
     <a-entity light="type: ambient; color: #ffffff; intensity: 1.2"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.8" position="0 2 1"></a-entity>
 
-    <a-marker id="marker-ar" type="pattern" preset="custom" url="./asset/pattern-marker.patt" marker-listener></a-marker>
+    <!-- Sumber Aset GLB Bumi -->
+    <a-assets>
+      <a-asset-item id="model-bumi" src="./asset/earth_cartoon.glb"></a-asset-item>
+    </a-assets>
 
+    <!-- Marker Custom Bumi -->
+    <a-marker
+      type="pattern"
+      preset="custom"
+      url="./asset/pattern-marker.patt"
+      data-name="Planet Bumi"
+      marker-listener
+    >
+      <!-- Model Utama -->
+      <a-entity
+        id="model-utama"
+        position="0 0 0"
+        scale="0.5 0.5 0.5"
+        animation-mixer="loop: repeat"
+        gltf-model="#model-bumi"
+        gesture-handler
+      >
+
+        <!-- ========================================== -->
+        <!-- TITIK PENOMORAN 1: DARATAN BUMI            -->
+        <!-- ========================================== -->
+        <a-entity line="start: 0.8 0 0.5; end: 1.6 0.8 0.8; color: #33ccff">
+          <!-- Titik pangkal di permukaan -->
+          <a-sphere position="0.8 0 0.5" radius="0.05" color="#33ccff"></a-sphere>
+          
+          <!-- Pin Nomor 1 (Selalu menghadap kamera & bisa diklik) -->
+          <a-entity position="1.6 0.8 0.8" look-at="[camera]">
+            <!-- Hitbox klik diperbesar sedikit agar mudah disentuh di layar HP -->
+            <a-circle
+              class="hotspot"
+              hotspot-point="pointId: 1"
+              radius="0.38"
+              color="#031226"
+              opacity="0.9"
+            ></a-circle>
+            <a-ring
+              id="ring-1"
+              radius-inner="0.32"
+              radius-outer="0.38"
+              color="#33ccff"
+            ></a-ring>
+            <a-text
+              value="1"
+              align="center"
+              position="0 0 0.02"
+              scale="1.6 1.6 1.6"
+              color="#ffffff"
+            ></a-text>
+          </a-entity>
+        </a-entity>
+
+        <!-- ========================================== -->
+        <!-- TITIK PENOMORAN 2: LAPISAN AWAN / ATMOSFER -->
+        <!-- ========================================== -->
+        <a-entity line="start: -0.6 1.1 0; end: -1.5 1.8 0.3; color: #33ccff">
+          <!-- Titik pangkal di awan -->
+          <a-sphere position="-0.6 1.1 0" radius="0.05" color="#33ccff"></a-sphere>
+          
+          <!-- Pin Nomor 2 -->
+          <a-entity position="-1.5 1.8 0.3" look-at="[camera]">
+            <a-circle
+              class="hotspot"
+              hotspot-point="pointId: 2"
+              radius="0.38"
+              color="#031226"
+              opacity="0.9"
+            ></a-circle>
+            <a-ring
+              id="ring-2"
+              radius-inner="0.32"
+              radius-outer="0.38"
+              color="#33ccff"
+            ></a-ring>
+            <a-text
+              value="2"
+              align="center"
+              position="0 0 0.02"
+              scale="1.6 1.6 1.6"
+              color="#ffffff"
+            ></a-text>
+          </a-entity>
+        </a-entity>
+
+        <!-- ========================================== -->
+        <!-- TITIK PENOMORAN 3: SAMUDRA / LAUTAN        -->
+        <!-- ========================================== -->
+        <a-entity line="start: 0 -0.6 0.85; end: 0 -1.3 1.5; color: #33ccff">
+          <!-- Titik pangkal di lautan -->
+          <a-sphere position="0 -0.6 0.85" radius="0.05" color="#33ccff"></a-sphere>
+          
+          <!-- Pin Nomor 3 -->
+          <a-entity position="0 -1.3 1.5" look-at="[camera]">
+            <a-circle
+              class="hotspot"
+              hotspot-point="pointId: 3"
+              radius="0.38"
+              color="#031226"
+              opacity="0.9"
+            ></a-circle>
+            <a-ring
+              id="ring-3"
+              radius-inner="0.32"
+              radius-outer="0.38"
+              color="#33ccff"
+            ></a-ring>
+            <a-text
+              value="3"
+              align="center"
+              position="0 0 0.02"
+              scale="1.6 1.6 1.6"
+              color="#ffffff"
+            ></a-text>
+          </a-entity>
+        </a-entity>
+
+      </a-entity>
+    </a-marker>
+
+    <!-- Kamera -->
     <a-entity camera></a-entity>
   </a-scene>
 
+  <!-- Logika Interaksi UI, Zoom In, & Animasi Model -->
   <script>
-    // Panggil objek 3D dari model.js (komponen buatan sendiri, atau file .glb bila ada C.src)
-    (function () {
-      const C = window.MODEL_CONFIG;
-      const marker = document.getElementById('marker-ar');
-      if (!C || !marker) { console.error('MODEL_CONFIG tidak ditemukan. Pastikan model.js termuat.'); return; }
-
-      const s = C.scale || 1;
-      const m = document.createElement('a-entity');
-      m.id = 'model-utama';
-      m.setAttribute('position', C.position || '0 0 0');
-      m.setAttribute('rotation', C.rotation || '0 0 0');
-      m.setAttribute('scale', s + ' ' + s + ' ' + s);
-      if (C.komponen) {
-        m.setAttribute(C.komponen, '');
-      } else {
-        m.setAttribute('gltf-model', 'url(' + C.src + ')');
-        if (C.animasi !== false) m.setAttribute('animation-mixer', 'loop: repeat');
-      }
-      m.setAttribute('gesture-handler', '');
-      marker.appendChild(m);
-    })();
-
-    // Sembunyikan loading setelah scene siap
-    function sembunyikanLoading() { const l = document.getElementById('loading'); if (l) l.style.display = 'none'; }
+    // Sembunyikan loading screen setelah scene AR siap
+    function sembunyikanLoading() {
+      var l = document.getElementById('loading');
+      if (l) l.style.display = 'none';
+    }
     document.querySelector('a-scene').addEventListener('loaded', sembunyikanLoading);
     window.addEventListener('arjs-video-loaded', sembunyikanLoading);
     setTimeout(sembunyikanLoading, 8000);
 
-    // Menu, info, dan tombol putar
     (function () {
-      const btnMenu = document.getElementById('btn-menu'), overlay = document.getElementById('overlay'),
-            menuPanel = document.getElementById('menu-panel'), infoModal = document.getElementById('info-modal');
+      const btnMenu = document.getElementById('btn-menu');
+      const btnInfo = document.getElementById('btn-info');
+      const btnNext = document.getElementById('btn-next');
+      const overlay = document.getElementById('overlay');
+      const menuPanel = document.getElementById('menu-panel');
+      const infoModal = document.getElementById('info-modal');
 
-      function tutupSemua() {
-        menuPanel.classList.remove('show'); infoModal.classList.remove('show'); overlay.classList.remove('show');
-        menuPanel.setAttribute('aria-hidden', 'true'); infoModal.setAttribute('aria-hidden', 'true');
-        btnMenu.setAttribute('aria-expanded', 'false');
-      }
-      btnMenu.addEventListener('click', function () {
-        if (menuPanel.classList.contains('show')) return tutupSemua();
-        tutupSemua(); menuPanel.classList.add('show'); overlay.classList.add('show');
-        menuPanel.setAttribute('aria-hidden', 'false'); btnMenu.setAttribute('aria-expanded', 'true');
-      });
-      document.getElementById('btn-info').addEventListener('click', function () {
-        tutupSemua(); infoModal.classList.add('show'); overlay.classList.add('show'); infoModal.setAttribute('aria-hidden', 'false');
-      });
-      overlay.addEventListener('click', tutupSemua);
-      document.getElementById('info-close').addEventListener('click', tutupSemua);
-      document.getElementById('menu-reload').addEventListener('click', function () { location.reload(); });
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') tutupSemua(); });
+      const pointCard = document.getElementById('point-card');
+      const pointBadge = document.getElementById('point-badge');
+      const pointTitle = document.getElementById('point-title');
+      const pointDesc = document.getElementById('point-desc');
+      const btnResetZoom = document.getElementById('btn-reset-zoom');
+      const quickButtons = document.querySelectorAll('.num-btn');
 
-      // Putar model 45° ke kanan (halus)
-      let frame = null;
-      document.getElementById('btn-next').addEventListener('click', function () {
+      // Nilai default model saat belum di-zoom
+      const DEFAULT_SCALE = { x: 0.5, y: 0.5, z: 0.5 };
+      const DEFAULT_POS = { x: 0, y: 0, z: 0 };
+
+      let animasiFrame = null;
+
+      // Fungsi animasi halus untuk Scale, Rotasi Y, dan Posisi (Zoom In / Reset)
+      function animasiModel(targetScale, targetRotY, targetPos, durasi = 450) {
         const el = document.getElementById('model-utama');
         if (!el || !el.object3D) return;
-        if (frame) cancelAnimationFrame(frame);
-        const dari = el.object3D.rotation.y, ke = dari + Math.PI / 4, mulai = performance.now();
-        (function langkah(now) {
-          const t = Math.min((now - mulai) / 300, 1);
-          el.object3D.rotation.y = dari + (ke - dari) * (1 - Math.pow(1 - t, 3));
-          frame = t < 1 ? requestAnimationFrame(langkah) : null;
-        })(mulai);
+
+        if (animasiFrame) cancelAnimationFrame(animasiFrame);
+
+        const startScale = {
+          x: el.object3D.scale.x,
+          y: el.object3D.scale.y,
+          z: el.object3D.scale.z
+        };
+        const startPos = {
+          x: el.object3D.position.x,
+          y: el.object3D.position.y,
+          z: el.object3D.position.z
+        };
+        const startRotY = el.object3D.rotation.y;
+        const endRotY = targetRotY !== null ? targetRotY : startRotY;
+        const mulai = performance.now();
+
+        function langkah(sekarang) {
+          const t = Math.min((sekarang - mulai) / durasi, 1);
+          // Ease out cubic
+          const halus = 1 - Math.pow(1 - t, 3);
+
+          el.object3D.scale.set(
+            startScale.x + (targetScale.x - startScale.x) * halus,
+            startScale.y + (targetScale.y - startScale.y) * halus,
+            startScale.z + (targetScale.z - startScale.z) * halus
+          );
+
+          el.object3D.position.set(
+            startPos.x + (targetPos.x - startPos.x) * halus,
+            startPos.y + (targetPos.y - startPos.y) * halus,
+            startPos.z + (targetPos.z - startPos.z) * halus
+          );
+
+          el.object3D.rotation.y = startRotY + (endRotY - startRotY) * halus;
+
+          animasiFrame = t < 1 ? requestAnimationFrame(langkah) : null;
+        }
+        animasiFrame = requestAnimationFrame(langkah);
+      }
+
+      // Highlight cincin 3D dan tombol angka yang sedang aktif
+      function updateHighlightTitik(activeId) {
+        ['1', '2', '3'].forEach((id) => {
+          const ring = document.getElementById('ring-' + id);
+          if (ring) {
+            ring.setAttribute('color', id === activeId ? '#ffb347' : '#33ccff');
+          }
+        });
+        quickButtons.forEach((btn) => {
+          btn.classList.toggle('active', btn.getAttribute('data-point') === activeId);
+        });
+      }
+
+      // Fungsi utama ketika titik nomor diklik (dari 3D maupun tombol cepat)
+      window.pilihTitikAR = function (id) {
+        const data = DATA_TITIK[id];
+        if (!data) return;
+
+        // Tampilkan informasi pada kartu
+        pointBadge.textContent = data.badge;
+        pointTitle.textContent = data.title;
+        pointDesc.textContent = data.desc;
+        pointCard.classList.add('show');
+
+        // Highlight nomor yang dipilih
+        updateHighlightTitik(id);
+
+        // Jalankan animasi Zoom In & fokus ke titik
+        animasiModel(data.targetScale, data.targetRotationY, data.targetPos, 500);
+      };
+
+      // Fungsi Reset Zoom & tutup kartu informasi
+      function resetZoomAR() {
+        pointCard.classList.remove('show');
+        updateHighlightTitik(null);
+        animasiModel(DEFAULT_SCALE, null, DEFAULT_POS, 400);
+      }
+
+      btnResetZoom.addEventListener('click', resetZoomAR);
+
+      // Event listener untuk tombol cepat 1, 2, 3 di kanan bawah
+      quickButtons.forEach((btn) => {
+        btn.addEventListener('click', function () {
+          const id = this.getAttribute('data-point');
+          window.pilihTitikAR(id);
+        });
+      });
+
+      // Logika Menu & Modal Info
+      function tutupSemua() {
+        menuPanel.classList.remove('show');
+        infoModal.classList.remove('show');
+        overlay.classList.remove('show');
+        menuPanel.setAttribute('aria-hidden', 'true');
+        infoModal.setAttribute('aria-hidden', 'true');
+        btnMenu.setAttribute('aria-expanded', 'false');
+      }
+
+      function bukaMenu() {
+        tutupSemua();
+        menuPanel.classList.add('show');
+        overlay.classList.add('show');
+        menuPanel.setAttribute('aria-hidden', 'false');
+        btnMenu.setAttribute('aria-expanded', 'true');
+      }
+
+      function bukaInfo() {
+        tutupSemua();
+        infoModal.classList.add('show');
+        overlay.classList.add('show');
+        infoModal.setAttribute('aria-hidden', 'false');
+      }
+
+      btnMenu.addEventListener('click', function () {
+        menuPanel.classList.contains('show') ? tutupSemua() : bukaMenu();
+      });
+      btnInfo.addEventListener('click', bukaInfo);
+      overlay.addEventListener('click', tutupSemua);
+      document.getElementById('info-close').addEventListener('click', tutupSemua);
+      document.getElementById('menu-reload').addEventListener('click', function () {
+        window.location.reload();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') tutupSemua();
+      });
+
+      // Tombol panah kanan: putar model 45 derajat ke kanan
+      btnNext.addEventListener('click', function () {
+        const el = document.getElementById('model-utama');
+        if (!el || !el.object3D) return;
+        const currentScale = {
+          x: el.object3D.scale.x,
+          y: el.object3D.scale.y,
+          z: el.object3D.scale.z
+        };
+        const currentPos = {
+          x: el.object3D.position.x,
+          y: el.object3D.position.y,
+          z: el.object3D.position.z
+        };
+        animasiModel(currentScale, el.object3D.rotation.y + Math.PI / 4, currentPos, 300);
       });
     })();
   </script>
