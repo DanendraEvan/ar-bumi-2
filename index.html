@@ -244,6 +244,25 @@
       }
     });
 
+    /* ZOOM TETAP DI TENGAH: model.js menaikkan Bumi (OFF) dari titik asal model, sehingga saat di-zoom (cubit)
+       pusat Bumi ikut "lari" ke atas karena skala dikalikan terhadap titik asal, bukan pusat Bumi.
+       Komponen ini menahan PUSAT model (posisi objek 'mesh') tetap di titik tengah gambar saat di-zoom/diputar.
+       PUSAT_ZOOM = false -> perilaku lama (Bumi ikut naik saat di-zoom).
+       PUSAT_NAIK = geser titik pusat itu ke atas gambar (satuan = lebar gambar), mis. 0.3 bila ORIENTASI = 'berdiri'. */
+    const PUSAT_ZOOM = true;
+    const PUSAT_NAIK = 0;
+    AFRAME.registerComponent('pusat-zoom', {
+      schema: { base: { type: 'vec3' }, naik: { type: 'number', default: 0 } },
+      tick: function () {
+        const o = this.el.object3D, mesh = this.el.getObject3D('mesh');
+        if (!mesh) return;
+        const b = this.data.base, c = mesh.position, s = o.scale;
+        // pusat model dalam koordinat induk = posisi + rotasi*(skala*pusat); dibatalkan agar pusat tetap di titik tetap
+        const v = new AFRAME.THREE.Vector3(c.x * s.x, c.y * s.y, c.z * s.z).applyQuaternion(o.quaternion);
+        o.position.set(b.x - v.x, b.y + this.data.naik - v.y, b.z - v.z);
+      }
+    });
+
     // Panggil objek 3D dari model.js (komponen buatan sendiri, atau file .glb bila ada C.src)
     (function () {
       const C = window.MODEL_CONFIG;
@@ -284,6 +303,7 @@
         m.setAttribute('gltf-model', 'url(' + C.src + ')');
         if (C.animasi !== false) m.setAttribute('animation-mixer', 'loop: repeat');
       }
+      if (PUSAT_ZOOM) m.setAttribute('pusat-zoom', 'base: ' + (C.position || '0 0 0') + '; naik: ' + PUSAT_NAIK);
       m.setAttribute('gesture-handler', '');
       pivot.appendChild(m);
     })();
