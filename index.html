@@ -22,7 +22,7 @@
   <style>
     .a-modal { display: none !important; }
     html,body{width:100%;height:100%}
-    #ar-wrap{position:fixed;left:0;top:0;width:100%;height:100vh;height:100dvh;overflow:hidden;background:#000}
+    #ar-wrap{position:fixed;left:0;top:0;width:100%;height:100vh;height:calc(var(--vh,1vh) * 100);height:100dvh;overflow:hidden;background:#000}
     #ar-wrap a-scene{position:absolute !important;left:0;top:0;width:100% !important;height:100% !important}
     #ar-wrap video{max-width:none}
     body{margin:0;overflow:hidden;font-family:'IBM Plex Mono','Courier New',Courier,monospace;background:#000;user-select:none}
@@ -164,11 +164,28 @@
   <script>
     // Paksa MindAR menghitung ulang ukuran video/canvas setelah siap dan saat layar berubah
     (function () {
-      const kirim = function () { window.dispatchEvent(new Event('resize')); };
       const sc = document.querySelector('a-scene');
-      sc.addEventListener('arReady', function () { kirim(); setTimeout(kirim, 300); setTimeout(kirim, 1000); });
-      window.addEventListener('orientationchange', function () { setTimeout(kirim, 300); });
-      if (window.visualViewport) window.visualViewport.addEventListener('resize', kirim);
+      let sedangKirim = false, timers = [];
+      function setVh() { document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px'); }
+      // Hitung ulang SEMUANYA: wadah, canvas A-Frame, video kamera & proyeksi MindAR, ukuran model
+      function kirim() {
+        setVh();
+        sedangKirim = true;
+        try { if (sc.renderer && sc.resize) sc.resize(); } catch (e) {}
+        window.dispatchEvent(new Event('resize'));
+        sedangKirim = false;
+      }
+      // Ukuran layar baru dilaporkan browser agak terlambat setelah diputar, jadi dihitung beberapa kali
+      function jadwalkan() {
+        timers.forEach(clearTimeout);
+        timers = [100, 300, 700, 1200].map(function (ms) { return setTimeout(kirim, ms); });
+      }
+      setVh();
+      sc.addEventListener('arReady', jadwalkan);
+      window.addEventListener('orientationchange', jadwalkan);
+      if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', jadwalkan);
+      window.addEventListener('resize', function () { if (!sedangKirim) jadwalkan(); });
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { if (!sedangKirim) jadwalkan(); });
     })();
   </script>
 
