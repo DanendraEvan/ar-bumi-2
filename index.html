@@ -60,6 +60,19 @@
     #info-modal li{margin-bottom:6px}
     #info-modal .close-btn{margin-top:18px;width:100%;padding:12px;background:none;border:1px solid #33ccff;border-radius:6px;color:#33ccff;font:inherit;font-weight:bold;cursor:pointer}
     #info-modal .close-btn:hover{background:rgba(51,204,255,.2);outline:none}
+
+    /* Penyesuaian landscape / layar pendek / poni (notch) */
+    #btn-menu,#btn-next{left:calc(20px + env(safe-area-inset-left,0px))}
+    #btn-info{right:calc(20px + env(safe-area-inset-right,0px))}
+    @media (orientation:landscape) and (max-height:520px){
+      .ui-btn{width:44px;height:44px}
+      .ui-btn svg{width:20px;height:20px}
+      #btn-menu,#btn-info{top:calc(10px + env(safe-area-inset-top,0px))}
+      #btn-next{bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+      #gui-container{top:calc(10px + env(safe-area-inset-top,0px));width:40%}
+      #menu-panel{padding-top:calc(64px + env(safe-area-inset-top,0px))}
+      #info-modal{max-height:88vh;padding:16px}
+    }
   </style>
 
   <script>
@@ -167,6 +180,41 @@
     const ORIENTASI = 'tegak';
     const ROT_X = 0, ROT_Y = 0, ROT_Z = 0;
 
+    /* UKURAN model (pengali di atas MODEL_CONFIG.scale milik model.js):
+       ukuran asli model diatur di model.js -> MODEL_CONFIG.scale.
+       Di sini hanya pengali tambahan tanpa perlu membuka model.js. 1 = apa adanya, 1.5 = 1,5x lebih besar, 0.7 = lebih kecil.
+       UKURAN_PORTRAIT / UKURAN_LANDSCAPE = pengali tambahan khusus saat HP berdiri / miring. */
+    const UKURAN = 1;
+    const UKURAN_PORTRAIT = 1, UKURAN_LANDSCAPE = 1;
+
+    /* ANTI-GETAR: SMOOTH 0.05..1, makin KECIL = makin halus/stabil tapi makin lambat mengikuti (1 = tanpa penghalus).
+       Filter bawaan MindAR (filterMinCF, filterBeta) ada di atribut mindar-image pada <a-scene>. */
+    const SMOOTH = 0.2;
+
+    // Penghalus tambahan: entity ini mengikuti gambar target dengan interpolasi sehingga getaran kecil teredam
+    AFRAME.registerComponent('smooth-follow', {
+      schema: { target: { type: 'selector' }, factor: { type: 'number', default: 0.2 } },
+      init: function () {
+        const T = AFRAME.THREE;
+        this.p = new T.Vector3(); this.q = new T.Quaternion(); this.s = new T.Vector3();
+        this.snap = true;
+        this.el.object3D.visible = false;
+      },
+      tick: function () {
+        const t = this.data.target && this.data.target.object3D;
+        if (!t) return;
+        const o = this.el.object3D;
+        if (!t.visible) { o.visible = false; this.snap = true; return; }
+        t.matrix.decompose(this.p, this.q, this.s);
+        if (this.snap) { o.position.copy(this.p); o.quaternion.copy(this.q); o.scale.copy(this.s); this.snap = false; }
+        else {
+          const f = this.data.factor;
+          o.position.lerp(this.p, f); o.quaternion.slerp(this.q, f); o.scale.lerp(this.s, f);
+        }
+        o.visible = true;
+      }
+    });
+
     // Panggil objek 3D dari model.js (komponen buatan sendiri, atau file .glb bila ada C.src)
     (function () {
       const C = window.MODEL_CONFIG;
@@ -178,7 +226,22 @@
       pivot.id = 'pivot-model';
       const rx = (ORIENTASI === 'berdiri' ? 90 : 0) + ROT_X;
       pivot.setAttribute('rotation', rx + ' ' + ROT_Y + ' ' + ROT_Z);
-      marker.appendChild(pivot);
+      // Holder penghalus: model ikut holder ini (bukan langsung ke gambar target)
+      const holder = document.createElement('a-entity');
+      holder.id = 'holder-halus';
+      holder.setAttribute('smooth-follow', 'target: #marker-ar; factor: ' + SMOOTH);
+      document.querySelector('a-scene').appendChild(holder);
+      holder.appendChild(pivot);
+
+      // Ukuran total = UKURAN x pengali portrait/landscape (dihitung ulang saat layar diputar)
+      function terapkanUkuran() {
+        const potret = window.innerHeight >= window.innerWidth;
+        const k = UKURAN * (potret ? UKURAN_PORTRAIT : UKURAN_LANDSCAPE);
+        pivot.setAttribute('scale', k + ' ' + k + ' ' + k);
+      }
+      terapkanUkuran();
+      window.addEventListener('resize', terapkanUkuran);
+      window.addEventListener('orientationchange', terapkanUkuran);
 
       const s = C.scale || 1;
       const m = document.createElement('a-entity');
