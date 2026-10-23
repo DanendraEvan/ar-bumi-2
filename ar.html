@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <title>Earth AR Scanner</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- A-Frame & AR.js -->
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-detector.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-handler.js"></script>
+
+  <!-- Objek 3D (file terpisah, ganti model di sini) -->
+  <script src="./model.js"></script>
+
+  <style>
+    body{margin:0;overflow:hidden;font-family:'IBM Plex Mono','Courier New',Courier,monospace;background:#000;user-select:none}
+
+    .loading{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;font-size:18px;font-weight:500;letter-spacing:3px;color:#fff;text-shadow:0 0 20px rgba(77,184,255,.5);
+      background:radial-gradient(ellipse 110% 45% at 50% 112%,rgba(40,130,255,.5),transparent 72%),linear-gradient(180deg,#000 0%,#02050d 55%,#061226 100%)}
+    .loading::after{content:'';display:block;width:40px;height:40px;margin:28px auto 0;border:3px solid rgba(77,184,255,.22);border-top:3px solid #ffb347;border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%{transform:scale(1)}100%{transform:scale(1.03)}}
+
+    #gui-container{position:absolute;top:calc(22px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:999;text-align:center;width:65%;max-width:320px;pointer-events:none}
+    .object-tag{background:rgba(0,0,0,.78);color:#33ccff;border:1.5px solid #33ccff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:bold;letter-spacing:1px;box-shadow:0 0 15px rgba(51,204,255,.45);display:none;animation:pulse 1.5s infinite alternate}
+
+    .ui-btn{position:absolute;z-index:10001;width:52px;height:52px;padding:0;border-radius:50%;background:rgba(0,0,0,.6);border:2px solid #33ccff;color:#33ccff;display:grid;place-items:center;cursor:pointer;box-shadow:0 0 15px rgba(51,204,255,.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);-webkit-tap-highlight-color:transparent;touch-action:manipulation;font-family:inherit;transition:background .2s,transform .15s}
+    .ui-btn:hover,.ui-btn:focus-visible{background:rgba(51,204,255,.2);outline:none}
+    .ui-btn:active{transform:scale(.92)}
+    .ui-btn svg{width:24px;height:24px;display:block}
+    #btn-menu{top:calc(20px + env(safe-area-inset-top,0px));left:20px}
+    #btn-info{top:calc(20px + env(safe-area-inset-top,0px));right:20px;font-size:26px;font-weight:bold;line-height:1}
+    #btn-next{bottom:calc(30px + env(safe-area-inset-bottom,0px));left:20px}
+
+    #overlay{position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .25s}
+    #overlay.show{opacity:1;pointer-events:auto}
+
+    #menu-panel{position:fixed;top:0;left:0;bottom:0;width:min(80vw,300px);z-index:10003;background:rgba(0,0,0,.92);border-right:2px solid #33ccff;box-shadow:0 0 25px rgba(51,204,255,.4);padding:calc(90px + env(safe-area-inset-top,0px)) 24px 24px;transform:translateX(-105%);transition:transform .3s ease;color:#33ccff;box-sizing:border-box}
+    #menu-panel.show{transform:translateX(0)}
+    #menu-panel h2{margin:0 0 20px;font-size:14px;letter-spacing:3px;opacity:.7}
+    #menu-panel a,#menu-panel button.menu-item{display:block;width:100%;box-sizing:border-box;padding:14px 4px;margin:0;background:none;border:0;border-bottom:1px solid rgba(51,204,255,.25);color:#33ccff;font:inherit;font-size:16px;text-align:left;text-decoration:none;cursor:pointer}
+    #menu-panel a:hover,#menu-panel button.menu-item:hover{color:#fff;outline:none}
+
+    #info-modal{position:fixed;top:50%;left:50%;z-index:10003;width:min(88vw,380px);max-height:80vh;overflow-y:auto;transform:translate(-50%,-50%) scale(.92);opacity:0;pointer-events:none;background:rgba(0,0,0,.92);border:2px solid #33ccff;border-radius:12px;box-shadow:0 0 25px rgba(51,204,255,.5);padding:24px;color:#fff;box-sizing:border-box;transition:opacity .25s,transform .25s}
+    #info-modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+    #info-modal h2{margin:0 0 14px;color:#33ccff;font-size:18px;letter-spacing:2px}
+    #info-modal ol{margin:0;padding-left:20px;line-height:1.7;font-size:14px}
+    #info-modal li{margin-bottom:6px}
+    #info-modal .close-btn{margin-top:18px;width:100%;padding:12px;background:none;border:1px solid #33ccff;border-radius:6px;color:#33ccff;font:inherit;font-weight:bold;cursor:pointer}
+    #info-modal .close-btn:hover{background:rgba(51,204,255,.2);outline:none}
+  </style>
+
+  <script>
+    // Tampilkan label saat marker terdeteksi
+    AFRAME.registerComponent('marker-listener', {
+      init: function () {
+        const tag = document.getElementById('object-tag');
+        this.el.addEventListener('markerFound', () => {
+          const nama = (window.MODEL_CONFIG && window.MODEL_CONFIG.nama) || 'Model';
+          tag.innerText = '🌍 DETEKSI: ' + nama.toUpperCase();
+          tag.style.display = 'block';
+        });
+        this.el.addEventListener('markerLost', () => { tag.style.display = 'none'; });
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="loading" id="loading">MEMUAT TAMPILAN BUMI...</div>
+
+  <div id="gui-container"><div class="object-tag" id="object-tag"></div></div>
+
+  <button class="ui-btn" id="btn-menu" type="button" aria-label="Buka menu" aria-controls="menu-panel" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <button class="ui-btn" id="btn-info" type="button" aria-label="Informasi" aria-controls="info-modal">i</button>
+  <button class="ui-btn" id="btn-next" type="button" aria-label="Putar model ke kanan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
+
+  <div id="overlay"></div>
+
+  <aside id="menu-panel" aria-hidden="true">
+    <h2>MENU</h2>
+    <a href="index.html">Beranda</a>
+    <a href="index.html#cara">Cara pakai</a>
+    <button class="menu-item" id="menu-reload" type="button">Muat ulang scanner</button>
+  </aside>
+
+  <div id="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-title" aria-hidden="true">
+    <h2 id="info-title">PANDUAN AR</h2>
+    <ol>
+      <li>Izinkan browser memakai kamera.</li>
+      <li>Arahkan kamera ke foto/marker sampai model 3D muncul.</li>
+      <li>Geser satu jari untuk memutar model, atau cubit dua jari untuk memperbesar/memperkecil.</li>
+    </ol>
+    <button class="close-btn" id="info-close" type="button">TUTUP</button>
+  </div>
+
+  <!-- AR Scene: kamera + marker. Objek 3D dipanggil dari model.js -->
+  <a-scene
+    vr-mode-ui="enabled: false;"
+    loading-screen="enabled: false;"
+    renderer="logarithmicDepthBuffer: true;"
+    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;"
+    embedded
+    gesture-detector
+  >
+    <a-entity light="type: ambient; color: #ffffff; intensity: 1.2"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 0.8" position="0 2 1"></a-entity>
+
+    <a-marker id="marker-ar" type="pattern" preset="custom" url="./asset/pattern-marker.patt" marker-listener></a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    // Panggil objek 3D dari model.js (komponen buatan sendiri, atau file .glb bila ada C.src)
+    (function () {
+      const C = window.MODEL_CONFIG;
+      const marker = document.getElementById('marker-ar');
+      if (!C || !marker) { console.error('MODEL_CONFIG tidak ditemukan. Pastikan model.js termuat.'); return; }
+
+      const s = C.scale || 1;
+      const m = document.createElement('a-entity');
+      m.id = 'model-utama';
+      m.setAttribute('position', C.position || '0 0 0');
+      m.setAttribute('rotation', C.rotation || '0 0 0');
+      m.setAttribute('scale', s + ' ' + s + ' ' + s);
+      if (C.komponen) {
+        m.setAttribute(C.komponen, '');
+      } else {
+        m.setAttribute('gltf-model', 'url(' + C.src + ')');
+        if (C.animasi !== false) m.setAttribute('animation-mixer', 'loop: repeat');
+      }
+      m.setAttribute('gesture-handler', '');
+      marker.appendChild(m);
+    })();
+
+    // Sembunyikan loading setelah scene siap
+    function sembunyikanLoading() { const l = document.getElementById('loading'); if (l) l.style.display = 'none'; }
+    document.querySelector('a-scene').addEventListener('loaded', sembunyikanLoading);
+    window.addEventListener('arjs-video-loaded', sembunyikanLoading);
+    setTimeout(sembunyikanLoading, 8000);
+
+    // Menu, info, dan tombol putar
+    (function () {
+      const btnMenu = document.getElementById('btn-menu'), overlay = document.getElementById('overlay'),
+            menuPanel = document.getElementById('menu-panel'), infoModal = document.getElementById('info-modal');
+
+      function tutupSemua() {
+        menuPanel.classList.remove('show'); infoModal.classList.remove('show'); overlay.classList.remove('show');
+        menuPanel.setAttribute('aria-hidden', 'true'); infoModal.setAttribute('aria-hidden', 'true');
+        btnMenu.setAttribute('aria-expanded', 'false');
+      }
+      btnMenu.addEventListener('click', function () {
+        if (menuPanel.classList.contains('show')) return tutupSemua();
+        tutupSemua(); menuPanel.classList.add('show'); overlay.classList.add('show');
+        menuPanel.setAttribute('aria-hidden', 'false'); btnMenu.setAttribute('aria-expanded', 'true');
+      });
+      document.getElementById('btn-info').addEventListener('click', function () {
+        tutupSemua(); infoModal.classList.add('show'); overlay.classList.add('show'); infoModal.setAttribute('aria-hidden', 'false');
+      });
+      overlay.addEventListener('click', tutupSemua);
+      document.getElementById('info-close').addEventListener('click', tutupSemua);
+      document.getElementById('menu-reload').addEventListener('click', function () { location.reload(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') tutupSemua(); });
+
+      // Putar model 45° ke kanan (halus)
+      let frame = null;
+      document.getElementById('btn-next').addEventListener('click', function () {
+        const el = document.getElementById('model-utama');
+        if (!el || !el.object3D) return;
+        if (frame) cancelAnimationFrame(frame);
+        const dari = el.object3D.rotation.y, ke = dari + Math.PI / 4, mulai = performance.now();
+        (function langkah(now) {
+          const t = Math.min((now - mulai) / 300, 1);
+          el.object3D.rotation.y = dari + (ke - dari) * (1 - Math.pow(1 - t, 3));
+          frame = t < 1 ? requestAnimationFrame(langkah) : null;
+        })(mulai);
+      });
+    })();
+  </script>
+</body>
+</html>
