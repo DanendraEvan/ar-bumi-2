@@ -9,20 +9,23 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- A-Frame + MindAR (membaca targets.mind) -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- A-Frame + MindAR (image tracking, membaca ./targets.mind). AR.js tidak dipakai lagi -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-detector.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/studio-backend/master/src/modules/marker/tools/gesture-handler.js"></script>
 
-  <!-- Objek 3D (file terpisah) -->
+  <!-- Objek 3D (file terpisah, ganti model di sini) -->
   <script src="./model.js"></script>
 
   <style>
+    .a-modal { display: none !important; }
     body{margin:0;overflow:hidden;font-family:'IBM Plex Mono','Courier New',Courier,monospace;background:#000;user-select:none}
 
     .loading{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 24px;font-size:18px;font-weight:500;letter-spacing:3px;color:#fff;text-shadow:0 0 20px rgba(77,184,255,.5);
       background:radial-gradient(ellipse 110% 45% at 50% 112%,rgba(40,130,255,.5),transparent 72%),linear-gradient(180deg,#000 0%,#02050d 55%,#061226 100%)}
     .loading::after{content:'';display:block;width:40px;height:40px;margin:28px auto 0;border:3px solid rgba(77,184,255,.22);border-top:3px solid #ffb347;border-radius:50%;animation:spin 1s linear infinite}
-    .loading.err::after{display:none}
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes pulse{0%{transform:scale(1)}100%{transform:scale(1.03)}}
 
@@ -43,8 +46,8 @@
     #menu-panel{position:fixed;top:0;left:0;bottom:0;width:min(80vw,300px);z-index:10003;background:rgba(0,0,0,.92);border-right:2px solid #33ccff;box-shadow:0 0 25px rgba(51,204,255,.4);padding:calc(90px + env(safe-area-inset-top,0px)) 24px 24px;transform:translateX(-105%);transition:transform .3s ease;color:#33ccff;box-sizing:border-box}
     #menu-panel.show{transform:translateX(0)}
     #menu-panel h2{margin:0 0 20px;font-size:14px;letter-spacing:3px;opacity:.7}
-    #menu-panel button.menu-item{display:block;width:100%;box-sizing:border-box;padding:14px 4px;margin:0;background:none;border:0;border-bottom:1px solid rgba(51,204,255,.25);color:#33ccff;font:inherit;font-size:16px;text-align:left;cursor:pointer}
-    #menu-panel button.menu-item:hover{color:#fff;outline:none}
+    #menu-panel a,#menu-panel button.menu-item{display:block;width:100%;box-sizing:border-box;padding:14px 4px;margin:0;background:none;border:0;border-bottom:1px solid rgba(51,204,255,.25);color:#33ccff;font:inherit;font-size:16px;text-align:left;text-decoration:none;cursor:pointer}
+    #menu-panel a:hover,#menu-panel button.menu-item:hover{color:#fff;outline:none}
 
     #info-modal{position:fixed;top:50%;left:50%;z-index:10003;width:min(88vw,380px);max-height:80vh;overflow-y:auto;transform:translate(-50%,-50%) scale(.92);opacity:0;pointer-events:none;background:rgba(0,0,0,.92);border:2px solid #33ccff;border-radius:12px;box-shadow:0 0 25px rgba(51,204,255,.5);padding:24px;color:#fff;box-sizing:border-box;transition:opacity .25s,transform .25s}
     #info-modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
@@ -54,8 +57,39 @@
     #info-modal .close-btn{margin-top:18px;width:100%;padding:12px;background:none;border:1px solid #33ccff;border-radius:6px;color:#33ccff;font:inherit;font-weight:bold;cursor:pointer}
     #info-modal .close-btn:hover{background:rgba(51,204,255,.2);outline:none}
   </style>
+
+  <script>
+    // Tampilkan label saat gambar target terdeteksi (MindAR: targetFound / targetLost)
+    AFRAME.registerComponent('marker-listener', {
+      init: function () {
+        const tag = document.getElementById('object-tag');
+        const scene = this.el.sceneEl;
+        this.el.addEventListener('targetFound', () => {
+          const nama = (window.MODEL_CONFIG && window.MODEL_CONFIG.nama) || 'Model';
+          tag.innerText = '🌍 DETEKSI: ' + nama.toUpperCase();
+          tag.style.display = 'block';
+          // gesture-handler mendengarkan event "markerFound" pada scene
+          scene.emit('markerFound');
+        });
+        this.el.addEventListener('targetLost', () => {
+          tag.style.display = 'none';
+          scene.emit('markerLost');
+        });
+      }
+    });
+  </script>
 </head>
+<script>
+  (function () {
+    function bersihkan() {
+      document.querySelectorAll('.a-modal, [class*="a-dialog"]').forEach(function (e) { e.remove(); });
+    }
+    new MutationObserver(bersihkan).observe(document.documentElement, { childList: true, subtree: true });
+    setInterval(bersihkan, 500);
+  })();
+</script>
 <body>
+
   <div class="loading" id="loading">MEMUAT TAMPILAN BUMI...</div>
 
   <div id="gui-container"><div class="object-tag" id="object-tag"></div></div>
@@ -72,6 +106,8 @@
 
   <aside id="menu-panel" aria-hidden="true">
     <h2>MENU</h2>
+    <a href="index.html">Beranda</a>
+    <a href="index.html#cara">Cara pakai</a>
     <button class="menu-item" id="menu-reload" type="button">Muat ulang scanner</button>
   </aside>
 
@@ -79,85 +115,109 @@
     <h2 id="info-title">PANDUAN AR</h2>
     <ol>
       <li>Izinkan browser memakai kamera.</li>
-      <li>Arahkan kamera ke gambar target sampai model 3D muncul.</li>
+      <li>Arahkan kamera ke foto/marker sampai model 3D muncul.</li>
       <li>Geser satu jari untuk memutar model, atau cubit dua jari untuk memperbesar/memperkecil.</li>
     </ol>
     <button class="close-btn" id="info-close" type="button">TUTUP</button>
   </div>
 
-  <!-- Scene MindAR: membaca targets.mind (harus satu folder dengan index.html) -->
+  <!-- AR Scene: kamera + gambar target (MindAR). Objek 3D dipanggil dari model.js -->
+  <!-- imageTargetSrc = file hasil compile gambar (sejajar dengan file ini).
+       filterMinCF makin kecil = makin halus saat diam; filterBeta makin besar = makin responsif;
+       missTolerance = jumlah frame model tetap tampil saat tracking sempat hilang. -->
   <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no;"
-    color-space="sRGB"
-    renderer="colorManagement: true; physicallyCorrectLights: false"
-    vr-mode-ui="enabled: false"
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.0001; filterBeta: 100; missTolerance: 30; warmupTolerance: 5; uiLoading: no; uiScanning: no; uiError: no;"
     device-orientation-permission-ui="enabled: false"
+    vr-mode-ui="enabled: false;"
+    loading-screen="enabled: false;"
+    renderer="logarithmicDepthBuffer: true;"
     embedded
+    gesture-detector
   >
     <a-entity light="type: ambient; color: #ffffff; intensity: 1.2"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.8" position="0 2 1"></a-entity>
 
-    <a-camera position="0 0 0" look-controls="enabled: false" cursor="rayOrigin: mouse"></a-camera>
+    <!-- targetIndex: urutan gambar di dalam targets.mind (0 = gambar pertama) -->
+    <a-entity id="marker-ar" mindar-image-target="targetIndex: 0" marker-listener></a-entity>
 
-    <a-entity id="marker-ar" mindar-image-target="targetIndex: 0"></a-entity>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
   </a-scene>
 
   <script>
-    // Panggil objek 3D dari model.js ke atas target
+    /* ORIENTASI dasar model terhadap gambar target:
+       'tegak'   = gambar ditempel di dinding / tampil di layar -> atas model = atas gambar, model menghadap kamera
+       'berdiri' = gambar diletakkan mendatar di meja -> model berdiri tegak lurus keluar dari gambar
+       ROT_X/Y/Z = koreksi manual (derajat), ditambahkan di atas ORIENTASI. */
+    const ORIENTASI = 'tegak';
+    const ROT_X = 0, ROT_Y = 0, ROT_Z = 0;
+
+    // Panggil objek 3D dari model.js (komponen buatan sendiri, atau file .glb bila ada C.src)
     (function () {
-      const C = window.MODEL_CONFIG, target = document.getElementById('marker-ar');
-      if (!C || !target) { console.error('MODEL_CONFIG tidak ditemukan. Pastikan model.js termuat.'); return; }
-      const s = C.scale || 1, m = document.createElement('a-entity');
+      const C = window.MODEL_CONFIG;
+      const marker = document.getElementById('marker-ar');
+      if (!C || !marker) { console.error('MODEL_CONFIG tidak ditemukan. Pastikan model.js termuat.'); return; }
+
+      // Pengatur orientasi terhadap gambar target
+      const pivot = document.createElement('a-entity');
+      pivot.id = 'pivot-model';
+      const rx = (ORIENTASI === 'berdiri' ? 90 : 0) + ROT_X;
+      pivot.setAttribute('rotation', rx + ' ' + ROT_Y + ' ' + ROT_Z);
+      marker.appendChild(pivot);
+
+      const s = C.scale || 1;
+      const m = document.createElement('a-entity');
       m.id = 'model-utama';
-      m.setAttribute('position', '0 0 0');
-      m.setAttribute('rotation', '90 0 0'); // sumbu atas model -> keluar dari gambar target
+      m.setAttribute('position', C.position || '0 0 0');
+      m.setAttribute('rotation', C.rotation || '0 0 0');
       m.setAttribute('scale', s + ' ' + s + ' ' + s);
-      if (C.komponen) m.setAttribute(C.komponen, '');
-      else { m.setAttribute('gltf-model', 'url(' + C.src + ')'); }
-      target.appendChild(m);
+      if (C.komponen) {
+        m.setAttribute(C.komponen, '');
+      } else {
+        m.setAttribute('gltf-model', 'url(' + C.src + ')');
+        if (C.animasi !== false) m.setAttribute('animation-mixer', 'loop: repeat');
+      }
+      m.setAttribute('gesture-handler', '');
+      pivot.appendChild(m);
     })();
 
-    // Loading, label deteksi, dan pesan error
-    const loading = document.getElementById('loading'), tag = document.getElementById('object-tag');
-    const scene = document.querySelector('a-scene');
-    scene.addEventListener('arReady', () => { loading.style.display = 'none'; });
-    scene.addEventListener('arError', () => {
-      loading.className = 'loading err';
-      loading.textContent = 'KAMERA ATAU targets.mind GAGAL DIMUAT. PASTIKAN HTTPS, IZIN KAMERA, DAN FILE targets.mind ADA.';
+    // Sembunyikan loading setelah AR siap (MindAR: arReady) atau gagal (arError)
+    function sembunyikanLoading() { const l = document.getElementById('loading'); if (l) l.style.display = 'none'; }
+    const sceneEl = document.querySelector('a-scene');
+    sceneEl.addEventListener('arReady', sembunyikanLoading);
+    sceneEl.addEventListener('arError', function () {
+      const l = document.getElementById('loading');
+      if (l) { l.textContent = 'Kamera atau targets.mind gagal dimuat. Pakai HTTPS/localhost, izinkan kamera, dan pastikan targets.mind sejajar dengan file ini.'; l.style.fontSize = '14px'; l.style.letterSpacing = '1px'; }
     });
-    const tgt = document.getElementById('marker-ar');
-    tgt.addEventListener('targetFound', () => {
-      tag.innerText = '🌍 DETEKSI: ' + ((window.MODEL_CONFIG && window.MODEL_CONFIG.nama) || 'MODEL').toUpperCase();
-      tag.style.display = 'block';
-    });
-    tgt.addEventListener('targetLost', () => { tag.style.display = 'none'; });
+    sceneEl.addEventListener('loaded', function () { setTimeout(sembunyikanLoading, 8000); });
 
-    // Menu, info, tombol putar
+    // Menu, info, dan tombol putar
     (function () {
       const btnMenu = document.getElementById('btn-menu'), overlay = document.getElementById('overlay'),
             menuPanel = document.getElementById('menu-panel'), infoModal = document.getElementById('info-modal');
+
       function tutupSemua() {
         menuPanel.classList.remove('show'); infoModal.classList.remove('show'); overlay.classList.remove('show');
         menuPanel.setAttribute('aria-hidden', 'true'); infoModal.setAttribute('aria-hidden', 'true');
         btnMenu.setAttribute('aria-expanded', 'false');
       }
-      btnMenu.addEventListener('click', () => {
+      btnMenu.addEventListener('click', function () {
         if (menuPanel.classList.contains('show')) return tutupSemua();
         tutupSemua(); menuPanel.classList.add('show'); overlay.classList.add('show');
         menuPanel.setAttribute('aria-hidden', 'false'); btnMenu.setAttribute('aria-expanded', 'true');
       });
-      document.getElementById('btn-info').addEventListener('click', () => {
+      document.getElementById('btn-info').addEventListener('click', function () {
         tutupSemua(); infoModal.classList.add('show'); overlay.classList.add('show'); infoModal.setAttribute('aria-hidden', 'false');
       });
       overlay.addEventListener('click', tutupSemua);
       document.getElementById('info-close').addEventListener('click', tutupSemua);
-      document.getElementById('menu-reload').addEventListener('click', () => location.reload());
-      document.addEventListener('keydown', e => { if (e.key === 'Escape') tutupSemua(); });
+      document.getElementById('menu-reload').addEventListener('click', function () { location.reload(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') tutupSemua(); });
 
-      const model = () => document.getElementById('model-utama');
+      // Putar model 45° ke kanan (halus)
       let frame = null;
-      document.getElementById('btn-next').addEventListener('click', () => {
-        const el = model(); if (!el || !el.object3D) return;
+      document.getElementById('btn-next').addEventListener('click', function () {
+        const el = document.getElementById('model-utama');
+        if (!el || !el.object3D) return;
         if (frame) cancelAnimationFrame(frame);
         const dari = el.object3D.rotation.y, ke = dari + Math.PI / 4, mulai = performance.now();
         (function langkah(now) {
@@ -166,18 +226,6 @@
           frame = t < 1 ? requestAnimationFrame(langkah) : null;
         })(mulai);
       });
-
-      // Gestur: 1 jari putar, 2 jari cubit untuk zoom
-      let lx = 0, pd = 0;
-      const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-      const skip = e => e.target.closest && e.target.closest('button,#menu-panel,#info-modal');
-      document.addEventListener('touchstart', e => { if (skip(e)) return; if (e.touches.length === 1) lx = e.touches[0].clientX; if (e.touches.length === 2) pd = dist(e.touches); }, { passive: true });
-      document.addEventListener('touchmove', e => {
-        if (skip(e)) return; const el = model(); if (!el || !el.object3D) return;
-        if (e.touches.length === 1) { const x = e.touches[0].clientX; el.object3D.rotation.y += (x - lx) * 0.01; lx = x; }
-        else if (e.touches.length === 2) { const d = dist(e.touches); if (pd) { const k = Math.min(3, Math.max(.3, el.object3D.scale.x * d / pd)); el.object3D.scale.set(k, k, k); } pd = d; }
-      }, { passive: true });
-      document.addEventListener('touchend', () => { pd = 0; }, { passive: true });
     })();
   </script>
 </body>
